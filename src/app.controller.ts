@@ -1,5 +1,10 @@
 import { Controller, Logger } from '@nestjs/common';
-import { MessagePattern, Payload } from '@nestjs/microservices';
+import {
+  Ctx,
+  MessagePattern,
+  Payload,
+  RmqContext,
+} from '@nestjs/microservices';
 import {
   ImageProcessorService,
   ImageProcessingResult,
@@ -19,18 +24,35 @@ export class AppController {
   @MessagePattern('process_image')
   async handleImageProcessing(
     @Payload() data: ImageMessage,
+    @Ctx() context: RmqContext,
   ): Promise<ImageProcessingResult> {
-    this.logger.log(`Received image: ${data.fileName}`);
+    const channel = context.getChannelRef();
+    const originalMsg = context.getMessage();
 
-    // Convert the imageData to Buffer if it's an array
-    const imageBuffer = Buffer.isBuffer(data.imageData)
-      ? data.imageData
-      : Buffer.from(data.imageData);
+    try {
+      this.logger.log(`Received image: ${data.fileName}`);
 
-    // Process the image
-    return await this.imageProcessorService.processImage(
-      imageBuffer,
-      data.fileName,
-    );
+      const imageBuffer = Buffer.isBuffer(data.imageData)
+        ? data.imageData
+        : Buffer.from(data.imageData);
+
+      const result = await this.imageProcessorService.processImage(
+        imageBuffer,
+        data.fileName,
+      );
+
+      channel.ack(originalMsg);
+      this.logger.log(`✅ Message acknowledged for: ${data.fileName}`);
+
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Error processing image ${data.fileName}: ${message}`);
+
+      channel.nack(originalMsg, false, true);
+      this.logger.log(`❌ Message requeued for retry: ${data.fileName}`);
+
+      throw error;
+    }
   }
 }

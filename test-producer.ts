@@ -5,6 +5,8 @@ import amqp from 'amqplib';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 
+const queue = 'images_queue';
+
 async function sendImageToQueue(imagePath: string): Promise<void> {
   let connection;
   try {
@@ -12,14 +14,8 @@ async function sendImageToQueue(imagePath: string): Promise<void> {
     connection = await amqp.connect('amqp://localhost:5672');
     const channel = await connection.createChannel();
 
-    const queue = 'images_queue';
+    await channel.assertQueue(queue, { durable: true });
 
-    // Assert the queue exists
-    await channel.assertQueue(queue, {
-      durable: true,
-    });
-
-    // Read the image file
     const imageBuffer = await fs.readFile(imagePath);
     const fileName = path.basename(imagePath);
 
@@ -39,16 +35,16 @@ async function sendImageToQueue(imagePath: string): Promise<void> {
 
     console.log(`✅ Sent image ${fileName} to queue`);
 
-    // Close the connection
+    // Give time for the message to be sent
     await new Promise((resolve) => setTimeout(resolve, 500));
-    await connection.close();
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('❌ Error sending image to queue:', message);
+    throw error;
+  } finally {
     if (connection) {
       await connection.close();
     }
-    process.exit(1);
   }
 }
 

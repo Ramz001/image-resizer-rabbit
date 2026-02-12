@@ -17,7 +17,7 @@ async function bootstrap() {
       },
     },
   );
-
+  app.enableShutdownHooks();
   await app.listen();
   console.log('Image processing microservice is listening for messages...');
 }
