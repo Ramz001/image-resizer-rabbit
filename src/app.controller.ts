@@ -1,12 +1,36 @@
-import { Controller, Get } from '@nestjs/common';
-import { AppService } from './app.service';
+import { Controller, Logger } from '@nestjs/common';
+import { MessagePattern, Payload } from '@nestjs/microservices';
+import {
+  ImageProcessorService,
+  ImageProcessingResult,
+} from './image-processor.service';
+
+interface ImageMessage {
+  fileName: string;
+  imageData: Buffer | number[];
+}
 
 @Controller()
 export class AppController {
-  constructor(private readonly appService: AppService) {}
+  private readonly logger = new Logger(AppController.name);
 
-  @Get()
-  getHello(): string {
-    return this.appService.getHello();
+  constructor(private readonly imageProcessorService: ImageProcessorService) {}
+
+  @MessagePattern('process_image')
+  async handleImageProcessing(
+    @Payload() data: ImageMessage,
+  ): Promise<ImageProcessingResult> {
+    this.logger.log(`Received image: ${data.fileName}`);
+
+    // Convert the imageData to Buffer if it's an array
+    const imageBuffer = Buffer.isBuffer(data.imageData)
+      ? data.imageData
+      : Buffer.from(data.imageData);
+
+    // Process the image
+    return await this.imageProcessorService.processImage(
+      imageBuffer,
+      data.fileName,
+    );
   }
 }

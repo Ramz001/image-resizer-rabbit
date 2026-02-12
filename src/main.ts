@@ -10,11 +10,16 @@ async function bootstrap() {
       options: {
         urls: ['amqp://localhost:5672'],
         queue: 'images_queue',
+        noAck: false,
+        queueOptions: {
+          durable: true,
+        },
       },
     },
   );
 
   await app.listen();
+  console.log('Image processing microservice is listening for messages...');
 }
 
 void bootstrap();

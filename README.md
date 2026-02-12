@@ -1,3 +1,144 @@
+# Image Resizer with RabbitMQ
+
+A NestJS microservice that processes images from a RabbitMQ queue and creates 4 optimized copies in different formats (WebP, AVIF, JPEG, PNG).
+
+## Features
+
+- Receives images from RabbitMQ queue
+- Creates 4 optimized image formats:
+  - **WebP** - Modern format with excellent compression
+  - **AVIF** - Next-gen format with superior compression
+  - **JPEG** - Optimized with mozjpeg, progressive encoding
+  - **PNG** - Optimized with palette compression
+- Automatic file size logging
+- Error handling with message acknowledgment
+- Durable queues for reliability
+
+## Prerequisites
+
+- Node.js (v18 or higher)
+- pnpm
+- Docker and Docker Compose (for RabbitMQ)
+
+## Installation
+
+1. Install dependencies:
+
+```bash
+pnpm install
+```
+
+2. Create a `.env` file based on `.env.example`:
+
+```bash
+cp .env.example .env
+```
+
+3. Start RabbitMQ:
+
+```bash
+docker-compose up -d
+```
+
+## Running the Application
+
+### Start the microservice worker:
+
+```bash
+pnpm start:dev
+```
+
+The worker will connect to RabbitMQ and wait for image processing messages.
+
+### Send test images to the queue:
+
+You can use the test producer script:
+
+```bash
+npx ts-node test-producer.ts path/to/your/image.jpg
+```
+
+Or you can send messages programmatically from another service:
+
+```typescript
+import * as amqp from 'amqplib';
+import { promises as fs } from 'fs';
+
+const connection = await amqp.connect('amqp://localhost:5672');
+const channel = await connection.createChannel();
+const imageBuffer = await fs.readFile('image.jpg');
+
+const message = {
+  pattern: 'process_image',
+  data: {
+    fileName: 'image.jpg',
+    imageData: imageBuffer,
+  },
+};
+
+channel.sendToQueue('images_queue', Buffer.from(JSON.stringify(message)), {
+  persistent: true,
+});
+```
+
+## Output
+
+Processed images are saved to the `output/` directory with the following naming pattern:
+
+- `{original-name}-{timestamp}.webp`
+- `{original-name}-{timestamp}.avif`
+- `{original-name}-{timestamp}.jpg`
+- `{original-name}-{timestamp}.png`
+
+## RabbitMQ Management
+
+Access the RabbitMQ management interface at http://localhost:15672
+
+Default credentials:
+
+- Username: guest
+- Password: guest
+
+## Configuration
+
+### RabbitMQ Connection
+
+Edit `src/main.ts` to change RabbitMQ connection settings:
+
+```typescript
+{
+  transport: Transport.RMQ,
+  options: {
+    urls: ['amqp://localhost:5672'],
+    queue: 'images_queue',
+    noAck: false,
+    queueOptions: {
+      durable: true,
+    },
+  },
+}
+```
+
+### Image Quality Settings
+
+Edit `src/image-processor.service.ts` to adjust quality settings:
+
+- WebP quality: Default 80 (0-100)
+- AVIF quality: Default 80 (0-100)
+- JPEG quality: Default 85 (0-100)
+- PNG compression: Default level 9 (0-9)
+
+## Project Structure
+
+```
+src/
+├── main.ts                      # Microservice bootstrap
+├── app.module.ts                # Main module
+├── app.controller.ts            # RabbitMQ message handler
+├── app.service.ts               # Application service
+└── image-processor.service.ts   # Image processing logic
+```
+
 <p align="center">
   <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
 </p>
@@ -96,3 +237,5 @@ Nest is an MIT-licensed open source project. It can grow thanks to the sponsors 
 ## License
 
 Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+
+npx ts-node test-producer.ts ./public/image.png
